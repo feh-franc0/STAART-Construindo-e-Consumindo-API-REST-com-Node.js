@@ -1,173 +1,58 @@
-const http = require('http')
+const express = require('express')
+const { TodosRepository } = require('./todos/repository')
 
-const wait = (time) =>
-  new Promise(resolve =>
-    setTimeout(resolve, time)
-  )
+const app = express()
 
-const todosDatabase = (() => {
-  let idSequence = 1
-  const todos = {}
+app.use(express.json())
 
-  const insert = async (todo) => {
-    await wait(500)
-    const id = idSequence++
-    const data = { ...todo, id }
-    todos[id] = data
-    return data
-  }
-
-  const list = async () => {
-    await wait(100)
-    return Object.values(todos)
-  }
-
-  const get = async (id) => {
-    await wait(100)
-    return todos[id]
-  }
-
-  const update = async (todo) => {
-    await wait(500)
-    todos[todo.id] = todo
-    return todo
-  }
-
-  const del = async (id) => {
-    await wait(500)
-    delete todos[id]
-  }
-
-  return {
-    insert,
-    list,
-    get,
-    update,
-    del,
-  }
-
-})()
-
-const JsonHeader = { 'Content-Type': 'application/json' }
-
-const server = http.createServer((request, response) => {
-
-  // GET /hello/:nome -> Hello ${name}
-  if (request.method === 'GET' && /^\/hello\/\w+$/.test(request.url)) {
-    const [,, name] = request.url.split('/')
-    response.writeHead(200)
-    response.end(`Hello ${name}!\n`)
-    return
-  }//* use a ferramenta CUrl para servir como cliente, use o comando: curl -X GET http://localhost:3000/hello/fernando
-
-  // GET /hello -> Hello World!
-  if (request.method === 'GET' && request.url.startsWith('/hello')) {
-    response.writeHead(200)
-    response.end('Hello World!\n')
-    return
-  } //* use a ferramenta CUrl para servir como cliente, use o comando: curl -X GET http://localhost:3000/hello
-
-  // POST /echo
-  if(request.method === 'POST' && request.url.startsWith('/echo')) {
-    response.writeHead(200)
-    request.pipe(response)
-    return
-  } //* use a ferramenta CUrl para servir como cliente, use o comando: curl -X POST http://localhost:3000/echo --header 'Content-Type: text/plain' --data-raw 'ola Pessoal'
-
-  // ***************
-  // ** API TODOS **
-  // ***************
-
-  // {id, title, text}
-
-  // POST /todos { "text": "string", "title": "string" }
-  if (request.method === 'POST' && request.url.startsWith('/todos')) {
-    let bodyRaw = ''
-
-    request.on('data', data => bodyRaw += data)
-
-    request.once('end', () => {
-      const todo = JSON.parse(bodyRaw)
-      todosDatabase.insert(todo)
-        .then(inserted => {
-          response.writeHead(201, JsonHeader)
-          response.end(JSON.stringify(inserted))
-        })
-    })
-
-    return
-  } //* curl -X POST http://localhost:3000/todos -d '{"title": "dar a aula", "text": "não esquecer os endpoints de todos" }'
-
-  // GET /todos/:id
-  if (request.method === 'GET' && /^\/todos\/\d+$/.test(request.url)) {
-    const [,, idRaw] = request.url.split('/')
-    const id = parseInt(idRaw)
-
-    todosDatabase
-      .get(id)
-      .then(todo => {
-        if (!todo) {
-          response.writeHead(400, JsonHeader)
-          response.end({ message: 'Resource not found'})
-        } else {
-          response.writeHead(200, JsonHeader)
-          response.end(todo)
-        }
-      })
-
-    return
-  }
-
-  // GET /todos
-  if (request.method === 'GET' && request.url.startsWith('/todos')){
-    todosDatabase
-      .list()
-      .then(todos => {
-        response.writeHead(200, JsonHeader)
-        response.end(JSON.stringify({ todos }))
-      })
-    return
-  } //* curl -X GET http://localhost:3000/todos
-
-  // DELETE /todos/:id
-  if (request.method === 'DELETE' && /^\/todos\/\d+$/.test(request.url)) {
-    const [,, idRaw] = request.url.split('/')
-    const id = parseInt(idRaw)
-
-    todosDatabase
-      .del(id)
-      .then(() => {
-        response.writeHead(204)
-        response.end()
-      })
-
-    return
-  }
-
-  // PUT /todos/:id { "title", "text" }
-  if (request.method === 'PUT' && /^\/todos\/\d+$/.test(request.url)) {
-    let bodyRaw = ''
-    const [,, idRaw] = request.url.split('/')
-    const id = parseInt(idRaw)
-
-    request.on('data', data => bodyRaw += data)
-
-    request.once('end', () => {
-      const todo = { ...JSON.parse(bodyRaw), id }
-
-      todosDatabase.update(todo)
-        .then(update => {
-          response.writeHead(200, JsonHeader)
-          response.end(JSON.stringify(update))
-        })
-    })
-  }
-
-
-  response.writeHead(404)
-  response.end('Resource not found\n')
+// GET /hello
+app.get('/hello', (req, res) => {
+  res.status(200).send('Hello world')
 })
 
-server.listen(3000, '0.0.0.0', () => {
-  console.log('Server started')
+// GET /hello/:name
+app.get('/hello/:name', (req, res) => {
+  const name = req.params.name
+  res.status(200).send(`Hello ${name}`)
 })
+
+// ** TODOS **
+
+const todosRepository = TodosRepository()
+
+const NotFound = {
+  error: 'Not found',
+  message: 'Resource not found',
+}
+
+// GET /todos/:id
+app.get('/todos/:id', async (req, res) => {
+  const id = parseInt(req.params.id)
+  const todo = await todosRepository.get(id)
+  if (!todo) {
+    res.status(404).send(NotFound)
+    return
+  }
+  res.status(200).send(todo)
+})
+//* comando curl para dar get: curl -X GET http://localhost:3000/todos/1
+
+// POST /todos
+app.post('/todos', (req, res) => {
+  const todo = req.body
+  todosRepository.insert(todo)
+    .then(inserted => {
+      res.status(201).send(inserted)
+    })
+})
+//* comando curl para dar push: curl -X POST http://localhost:3000/todos -H 'Content-Type: application/json' -d '{"text":"meu texto","title":"meu titulo"}'
+
+
+app
+  .listen(3000, '0.0.0.0', () => {
+    console.log("Server started")
+  })
+  .once('error', (error) => {
+    console.error(error)
+    process.exit(1)
+  })
