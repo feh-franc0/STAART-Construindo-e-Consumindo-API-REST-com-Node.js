@@ -38,15 +38,49 @@ app.get('/todos/:id', async (req, res) => {
 //* comando curl para dar get: curl -X GET http://localhost:3000/todos/1
 
 // POST /todos
-app.post('/todos', (req, res) => {
+app.post('/todos', async (req, res) => {
   const todo = req.body
-  todosRepository.insert(todo)
-    .then(inserted => {
-      res.status(201).send(inserted)
-    })
+  const inserted = await todosRepository.insert(todo)
+
+  res
+    .status(201)
+    .header('Location', `/todos/${inserted.id}`)
+    .send(inserted)
 })
 //* comando curl para dar push: curl -X POST http://localhost:3000/todos -H 'Content-Type: application/json' -d '{"text":"meu texto","title":"meu titulo"}'
 
+// PUT /todos/:id
+app.put('/todos/:id',  async (req, res) => {
+  const id = parseInt(req.params.id)
+  const todo = { ...req.body, id }
+
+  const found = await todosRepository.get(id)
+  if (!found) {
+    res.status(404).send(NotFound)
+    return
+  }
+  const updated = await todosRepository.update(todo)
+  res.status(200).send(updated)
+})
+
+// DEL /todos/:id
+app.delete('/todos/:id', async (req, res) => {
+  const id = parseInt(req.params.id)
+  const found = await todosRepository.get(id)
+  if (!found) {
+    res.status(404).send(NotFound)
+    return
+  }
+  await todosRepository.del(id)
+  res.status(204).send()
+})
+
+// GET /TODOS
+app.get('/todos', (_req, res) => {
+  todosRepository
+    .list()
+    .then(todos => res.status(200).send({todos}))
+})
 
 app
   .listen(3000, '0.0.0.0', () => {
