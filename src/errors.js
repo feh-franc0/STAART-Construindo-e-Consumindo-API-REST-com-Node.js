@@ -6,13 +6,25 @@ class DomainError extends Error {
 }
 
 class NotFoundError extends DomainError {
-  constructor({ resourceName, resourceIdentifier }) {
-    super(`Resource ${resourceName} with identifier ${resourceIdentifier} not found.`)
+  constructor({ resourceName, resourceId }) {
+    super(`Resource '${resourceName}' with identifier '${resourceId}' not found`)
     this.resourceName = resourceName
-    this.resourceIdentifier = resourceIdentifier
+    this.resourceId = resourceId
   }
+}
+
+class ValidationError extends DomainError {
+  constructor({ message = 'Invalid parameters', validations }) {
+    super(message)
+    this.validations = validations
+  }
+}
+
+class ConflictError extends DomainError {
 }
 
 module.exports = {
   NotFoundError,
+  ValidationError,
+  ConflictError,
 }
